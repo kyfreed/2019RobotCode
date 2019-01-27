@@ -1,0 +1,120 @@
+import wpilib, ctre, math, logging
+from wpilib.drive import MecanumDrive
+from networktables import NetworkTables
+step2 = 0
+
+# To see messages from networktables, you must setup logging
+logging.basicConfig(level=logging.DEBUG)
+
+NetworkTables.initialize()
+sd = NetworkTables.getTable("SmartDashboard")
+
+class MyRobot(wpilib.IterativeRobot):
+	# Channels on the roboRIO that the motor controllers are plugged in to
+	frontLeftChannel = 3
+	rearLeftChannel = 4
+	frontRightChannel = 5
+	rearRightChannel = 1
+
+	# The channel on the driver station that the joystick is connected to
+	joystickChannel = 0
+
+	def robotInit(self):
+		"""Robot initialization function"""
+		self.frontLeftMotor = ctre.WPI_TalonSRX(self.frontLeftChannel)
+		self.rearLeftMotor = ctre.WPI_TalonSRX(self.rearLeftChannel)
+		self.frontRightMotor = ctre.WPI_TalonSRX(self.frontRightChannel)
+		self.rearRightMotor = ctre.WPI_TalonSRX(self.rearRightChannel)
+
+		# invert the left side motors
+		self.frontLeftMotor.setInverted(True)
+
+		# you may need to change or remove this to match your robot
+		self.rearLeftMotor.setInverted(True)
+
+		self.drive = MecanumDrive(
+			self.frontLeftMotor,
+			self.rearLeftMotor,
+			self.frontRightMotor,
+			self.rearRightMotor,
+		)
+
+		self.drive.setExpiration(0.1)
+		self.frontLeftMotor.setSafetyEnabled(False)
+		self.frontRightMotor.setSafetyEnabled(False)
+		self.rearLeftMotor.setSafetyEnabled(False)
+		self.rearRightMotor.setSafetyEnabled(False)
+
+		self.stick = wpilib.Joystick(self.joystickChannel)
+		
+		
+		
+	def forward(self):
+	  self.frontLeftMotor.set(.5)
+	  self.frontRightMotor.set(.5)
+	  self.rearLeftMotor.set(.5)
+	  self.rearRightMotor.set(.5)
+	def stop(self):
+	  self.frontLeftMotor.set(0)
+	  self.frontRightMotor.set(0)
+	  self.rearLeftMotor.set(0)
+	  self.rearRightMotor.set(0)
+
+	def autonomousInit(self):
+		self.frontRightMotor.setQuadraturePosition(0,0)
+		
+		
+
+	def autonomousPeriodic(self):
+		inches = self.frontRightMotor.getQuadraturePosition() * 0.0061359232
+		# global step2 because it needs to know that the variable step2
+		# that it is calling has already been assigned a number in the
+		# global scope, and that it is not a local variable
+		global step2
+		
+		
+		if inches < 120:
+			self.forward()
+		# goes forward to 10 feet if the robot has not gotten there yet
+		if inches >= 120:
+			self.stop()
+			wpilib.Timer.delay(1)
+			self.right()
+			step2 = 1
+		# stops the robot after 10 feet, waits a second, and prepares for the next
+		# step by setting the motors to go right and fulfilling the step2 requirement
+		
+		# i checking for 84 inches because the rear left motor is what we are 
+		# checking and it would have to go backwards for the robot to go right,
+		# moving the encoder number down 36 inches for 3 feet
+		# it says 36 times square root 2 because we predict that for every root 2
+		# that the wheels turn, it will move 1 to the side, requiring root 2 times
+		# 36 backwards inches to get 36 right inches
+		if inches <= (120 - (36 * math.sqrt(2))) and step2 == 1:
+			self.stop()
+		
+		#    __
+		#   /  \
+		#  | /\ |
+		#  | \/ |
+		#   \  /
+		#    ^^
+		
+		
+		
+	def operatorControl(self):
+		"""Runs the motors with Mecanum drive."""
+
+		self.drive.setSafetyEnabled(True)
+		while self.isOperatorControl() and self.isEnabled():
+			# Use the joystick X axis for lateral movement, Y axis for forward movement, and Z axis for rotation.
+			# This sample does not use field-oriented drive, so the gyro input is set to zero.
+			self.drive.driveCartesian(
+				self.stick.getX(), self.stick.getY(), self.stick.getZ(), 0
+			)
+
+			wpilib.Timer.delay(0.005)  # wait 5ms to avoid hogging CPU cycles
+
+
+if __name__ == "__main__":
+	wpilib.run(MyRobot)
